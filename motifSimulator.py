@@ -43,17 +43,17 @@ motif_names = ["CTCF"]
 # motifs file
 jfname = "jaspar/JASPAR2022_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
 
-parser = argparse.ArgumentParser(description='Generate synthetic DNA sequences containing, and not containing, instances of a given motif.')
+parser = argparse.ArgumentParser(description='Generate synthetic DNA sequences containing, and not containing, instances of a given set of motifs.')
 parser.add_argument('--gc', dest='gc', type=float,
-                        help='G+C content of generated sequence.')
+                        help='G+C content of generated sequence (default ' + str(gc) + ').')
 parser.add_argument('--len', dest='seqlen', type=int,
-                        help='Length (bp) of each generated sequence.')
+                        help='Length (bp) of each generated sequence (default ' + str(seqlen) + ').')
 parser.add_argument('--N', dest='N', type=int,
-                        help='Number of positive and negative sequences to generate.')
+                        help='Number of positive and negative sequences to generate (default ' + str(N) + ').')
 parser.add_argument('--o', dest='o', type=str,
-                        help='Root name for output files (including path).')
+                        help='Root name for output files (including path) (default \'' + outroot + '\').')
 parser.add_argument('--m', dest='motif_names', type=str,
-                        help="Name of motifs from JASPAR (comma-separated list).")
+                        help='Name of motifs from JASPAR (comma-separated list)  (default ' + str(motif_names) + ').')
 
 args = parser.parse_args()
 
@@ -72,23 +72,19 @@ with open(jfname) as handle:
     M = motifs.parse(handle, "jaspar")
 
 # collect the specified motifs and store as matrices
-targetMotifs = []
-foundnames = []
+foundnames = {}
 mnorm = []
 mlen = 0
-already_added = {}
 for m in M:
-    if m.name in motif_names and m.name not in already_added:
-        targetMotifs.append(m)
-        foundnames.append(m.name)
-        mlen += m.length
+    if m.name in motif_names and m.name not in foundnames:
         mnorm.append(asMatrix(m.counts.normalize()))
-        already_added[m.name] = 1
+        mlen += m.length
+        foundnames[m.name] = True
 
-if targetMotifs is None or len(mnorm) < len(motif_names):
+if len(mnorm) < len(motif_names):
     raise Exception("Unable to find some motifs.  Found only: " + str(foundnames))
 else:
-    print(f'Found motifs for {str(foundnames)}.')
+    print(f'Found motifs for {str(foundnames.keys())}.')
 
 if (seqlen < 3*mlen):
     raise Exception("Sum of motif lengths must be no more than one third of sequence length.")
