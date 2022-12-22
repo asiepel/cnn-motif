@@ -10,6 +10,7 @@ from Bio import motifs
 
 ALPHABET = "ACGT"
 ALPHSIZE = 4
+rng = np.random.default_rng()
 
 # generate a DNA sequence of the desired length with the desired G+C content
 def seqgen(gc, len):    
@@ -39,6 +40,9 @@ seqlen = 300
 N = 100
 outroot = './motifSimulator'
 motif_names = ["CTCF"]
+proseq_mode = False
+backgd_mean = -1.0
+foregd_mean = -1.0
 
 # motifs file
 jfname = "jaspar/JASPAR2022_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
@@ -52,6 +56,8 @@ parser.add_argument('--N', dest='N', type=int,
                         help='Number of positive and negative sequences to generate (default ' + str(N) + ').')
 parser.add_argument('--o', dest='o', type=str,
                         help='Root name for output files (including path) (default \'' + outroot + '\').')
+parser.add_argument('--proseq', dest='proseq', type=str,
+                        help='Generate PRO-seq-like read counts instead of motif labels.  Argument should be a list of two numbers, indicating the expected readcounts per kb for the background and foreground sites, respectively (e.g., \'100,1000\').')
 parser.add_argument('--m', dest='motif_names', type=str,
                         help='Name of motifs from JASPAR (comma-separated list)  (default ' + str(motif_names) + ').')
 
@@ -65,6 +71,13 @@ if (args.N is not None):
     N = args.N
 if (args.motif_names is not None):
     motif_names = args.motif_names.split(',')
+if (args.proseq is not None):
+    proseq_mode = True
+    str1, str2 = args.proseq.split(',')
+    backgd_mean = float(str1)
+    foregd_mean = float(str2)
+    if backgd_mean <= 0 or foregd_mean <= 0:
+        raise Exception("Background and foreground reads counts must be nonnegative")
     
 # read in the motifs from JASPAR
 print(f'Reading motif data from {jfname}.')
@@ -93,22 +106,37 @@ print(f'Generating {N} positive and {N} negative examples with G+C content of {g
 
 # generate random sequences
 seqs = [""] * (2*N)
-labels = [0] * N + [1] * N
+
+# these are for use only if generating pro-seq-like data
+proseq_mean = [[]] * (2*N) 
+rdcounts = [[]] * (2*N)
+
 for i in range(2*N):
     seqs[i] = (seqgen(gc, seqlen))
-
+    if proseq_mode is True:
+        proseq_mean[i] = [backgd_mean/1000] * seqlen
+        
 print('Implanting motif instances.')
 
 # implant motif instances in the second half
-for i in range(N, 2*N):
+for i in range(N, 2*N):    
     for m in mnorm:
         # pick a location at random from the middle third of the sequence
         p = r.randint(math.ceil(seqlen/3), math.floor(2*seqlen/3))     # check bound    
         s = seqs[i][:p-1] + samp_motif(m) + seqs[i][p+m.shape[1]-1:]
         seqs[i] = s
-    
-df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})
+        if proseq_mode is True:
+            newmean = proseq_mean[i][:p-1] + [foregd_mean/1000] * m.shape[1] + proseq_mean[i][p+m.shape[1]-1:]
+            proseq_mean[i] = newmean
 
+if proseq_mode is False:   # regular motif mode
+    labels = [0] * N + [1] * N
+    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})
+else:    # instead generate proseq-like read counts
+    for i in range(2*N):
+        rdcounts[i] = rng.poisson(proseq_mean[i])
+    df = pd.DataFrame({'readCounts': rdcounts, 'seq': seqs})
+    
 print(f'Saving dataframe to {outroot}.csv.')
 df.to_csv(outroot + ".csv", index=False)
     
