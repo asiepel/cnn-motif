@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/local/opt/python/bin/python3
+##!/usr/bin/env python
 
 import argparse
 import numpy as np
@@ -34,10 +35,10 @@ def asMatrix(mnorm):
 
 # defaults
 gc = 0.4
-len = 300
+seqlen = 300
 N = 100
 outroot = './motifSimulator'
-motif_name = "CTCF"
+motif_names = ["CTCF"]
 
 # motifs file
 jfname = "jaspar/JASPAR2022_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
@@ -45,65 +46,70 @@ jfname = "jaspar/JASPAR2022_CORE_vertebrates_non-redundant_pfms_jaspar.txt"
 parser = argparse.ArgumentParser(description='Generate synthetic DNA sequences containing, and not containing, instances of a given motif.')
 parser.add_argument('--gc', dest='gc', type=float,
                         help='G+C content of generated sequence.')
-parser.add_argument('--len', dest='len', type=int,
+parser.add_argument('--len', dest='seqlen', type=int,
                         help='Length (bp) of each generated sequence.')
 parser.add_argument('--N', dest='N', type=int,
                         help='Number of positive and negative sequences to generate.')
 parser.add_argument('--o', dest='o', type=str,
                         help='Root name for output files (including path).')
-parser.add_argument('--m', dest='motif_name', type=str,
-                        help="Name of motif from JASPAR.")
+parser.add_argument('--m', dest='motif_names', type=str,
+                        help="Name of motifs from JASPAR (comma-separated list).")
 
 args = parser.parse_args()
 
 if (args.gc is not None):
     gc = args.gc
-if (args.len is not None):
-    len = args.len
+if (args.seqlen is not None):
+    seqlen = args.seqlen
 if (args.N is not None):
     N = args.N
-if (args.motif_name is not None):
-    motif_name = args.motif_name
+if (args.motif_names is not None):
+    motif_names = args.motif_names.split(',')
     
 # read in the motifs from JASPAR
 print(f'Reading motif data from {jfname}.')
 with open(jfname) as handle:
     M = motifs.parse(handle, "jaspar")
 
-# find the specified motif
-targetMotif = None
+# collect the specified motifs and store as matrices
+targetMotifs = []
+foundnames = []
+mnorm = []
+mlen = 0
+already_added = {}
 for m in M:
-    if m.name == motif_name:
-        targetMotif = m
+    if m.name in motif_names and m.name not in already_added:
+        targetMotifs.append(m)
+        foundnames.append(m.name)
+        mlen += m.length
+        mnorm.append(asMatrix(m.counts.normalize()))
+        already_added[m.name] = 1
 
-if (targetMotif is None):
-    raise Exception("Motif name " + motif_name + " not found in database.")
+if targetMotifs is None or len(mnorm) < len(motif_names):
+    raise Exception("Unable to find some motifs.  Found only: " + str(foundnames))
 else:
-    print(f'Found motif for {motif_name}.')
+    print(f'Found motifs for {str(foundnames)}.')
 
-# normalize counts for sampling
-mlen = targetMotif.length
-mnorm = asMatrix(targetMotif.counts.normalize())
+if (seqlen < 3*mlen):
+    raise Exception("Sum of motif lengths must be no more than one third of sequence length.")
 
-if (len < 3*mlen):
-    raise Exception("Motif length must be no more than one third of sequence length.")
-
-print(f'Generating {N} positive and {N} negative examples with G+C content of {gc:.3f} and length {len} bp.')
+print(f'Generating {N} positive and {N} negative examples with G+C content of {gc:.3f} and length {seqlen} bp.')
 
 # generate random sequences
 seqs = [""] * (2*N)
 labels = [0] * N + [1] * N
 for i in range(2*N):
-    seqs[i] = (seqgen(gc, len))
+    seqs[i] = (seqgen(gc, seqlen))
 
 print('Implanting motif instances.')
 
 # implant motif instances in the second half
 for i in range(N, 2*N):
-    # pick a location at random from the middle third of the sequence
-    p = r.randint(math.ceil(len/3), math.floor(2*len/3))     # check bound    
-    s = seqs[i][:p-1] + samp_motif(mnorm) + seqs[i][p+mlen-1:]
-    seqs[i] = s
+    for m in mnorm:
+        # pick a location at random from the middle third of the sequence
+        p = r.randint(math.ceil(seqlen/3), math.floor(2*seqlen/3))     # check bound    
+        s = seqs[i][:p-1] + samp_motif(m) + seqs[i][p+m.shape[1]-1:]
+        seqs[i] = s
     
 df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})
 
