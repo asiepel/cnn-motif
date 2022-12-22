@@ -95,7 +95,7 @@ for m in M:
         foundnames[m.name] = True
 
 if len(mnorm) < len(motif_names):
-    raise Exception("Unable to find some motifs.  Found only: " + str(foundnames))
+    raise Exception("Unable to find some motifs.  Found only: " + str(foundnames.keys()))
 else:
     print(f'Found motifs for {str(foundnames.keys())}.')
 
