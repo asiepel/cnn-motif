@@ -135,15 +135,12 @@ print(f'Saving dataframe to {outroot}.csv.')
 
 if proseq_mode is False:   # regular motif mode
     labels = [0] * N + [1] * N
-    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})    
-    df.to_csv(outroot + ".csv", index=False)
+    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})        
 else:    # instead generate proseq-like read counts
     for i in range(2*N):
         rdcounts[i] = np.array(rng.poisson(proseq_mean[i]),dtype=np.int8)
     df = pd.DataFrame({'readCounts': rdcounts, 'seq': seqs})
-    df.to_csv(outroot + ".csv", index=False)
-
     
-
+df.to_csv(outroot + ".csv", index=False)
 
 
