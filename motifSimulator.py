@@ -78,6 +78,8 @@ if (args.proseq is not None):
     foregd_mean = float(str2)
     if backgd_mean <= 0 or foregd_mean <= 0:
         raise Exception("Background and foreground reads counts must be nonnegative")
+if (args.o is not None):
+    outroot = args.o
     
 # read in the motifs from JASPAR
 print(f'Reading motif data from {jfname}.')
