@@ -131,16 +131,18 @@ for i in range(N, 2*N):
             newmean = proseq_mean[i][:p-1] + [foregd_mean/1000] * m.shape[1] + proseq_mean[i][p+m.shape[1]-1:]
             proseq_mean[i] = newmean
 
+print(f'Saving dataframe to {outroot}.csv.')
+
 if proseq_mode is False:   # regular motif mode
     labels = [0] * N + [1] * N
-    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})
+    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})    
+    df.to_csv(outroot + ".csv", index=False)
 else:    # instead generate proseq-like read counts
     for i in range(2*N):
-        rdcounts[i] = rng.poisson(proseq_mean[i])
+        rdcounts[i] = np.array(rng.poisson(proseq_mean[i]),dtype=np.int8)
     df = pd.DataFrame({'readCounts': rdcounts, 'seq': seqs})
-    
-print(f'Saving dataframe to {outroot}.csv.')
-df.to_csv(outroot + ".csv", index=False)
+    df.to_csv(outroot + ".csv", index=False)
+
     
 
 
