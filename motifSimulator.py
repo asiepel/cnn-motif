@@ -57,7 +57,7 @@ parser.add_argument('--N', dest='N', type=int,
 parser.add_argument('--o', dest='o', type=str,
                         help='Root name for output files (including path) (default \'' + outroot + '\').')
 parser.add_argument('--proseq', dest='proseq', type=str,
-                        help='Generate PRO-seq-like read counts instead of motif labels.  Argument should be a list of two numbers, indicating the expected readcounts per kb for the background and foreground sites, respectively (e.g., \'100,1000\').')
+                        help='Generate PRO-seq-like read counts instead of motif labels.  Argument should be a list of two numbers, indicating the expected readcounts per kb for the background and foreground sites, respectively (e.g., \'100,1000\').  In this case 2N sequences are generated and all have motifs.')
 parser.add_argument('--m', dest='motif_names', type=str,
                         help='Name of motifs from JASPAR (comma-separated list)  (default ' + str(motif_names) + ').')
 
@@ -104,7 +104,10 @@ else:
 if (seqlen < 3*mlen):
     raise Exception("Sum of motif lengths must be no more than one third of sequence length.")
 
-print(f'Generating {N} positive and {N} negative examples with G+C content of {gc:.3f} and length {seqlen} bp.')
+if proseq_mode is False:
+    print(f'Generating {N} positive and {N} negative examples with G+C content of {gc:.3f} and length {seqlen} bp.')
+else:
+    print(f'Generating {2*N} examples with G+C content of {gc:.3f} and length {seqlen} bp.')
 
 # generate random sequences
 seqs = [""] * (2*N)
@@ -115,32 +118,40 @@ rdcounts = [[]] * (2*N)
 
 for i in range(2*N):
     seqs[i] = (seqgen(gc, seqlen))
-    if proseq_mode is True:
-        proseq_mean[i] = [backgd_mean/1000] * seqlen
-        
+                
 print('Implanting motif instances.')
 
-# implant motif instances in the second half
-for i in range(N, 2*N):    
-    for m in mnorm:
-        # pick a location at random from the middle third of the sequence
-        p = r.randint(math.ceil(seqlen/3), math.floor(2*seqlen/3))     # check bound    
-        s = seqs[i][:p-1] + samp_motif(m) + seqs[i][p+m.shape[1]-1:]
-        seqs[i] = s
-        if proseq_mode is True:
+if proseq_mode is True:
+    # implant motif instances in all sequences
+    for i in range(2*N):    
+        for m in mnorm:
+            # pick a location at random from the middle third of the sequence
+            p = r.randint(math.ceil(seqlen/3), math.floor(2*seqlen/3))        
+            s = seqs[i][:p-1] + samp_motif(m) + seqs[i][p+m.shape[1]-1:]
+            seqs[i] = s
+
+            proseq_mean[i] = [backgd_mean/1000] * seqlen
             newmean = proseq_mean[i][:p-1] + [foregd_mean/1000] * m.shape[1] + proseq_mean[i][p+m.shape[1]-1:]
             proseq_mean[i] = newmean
 
-print(f'Saving dataframe to {outroot}.csv.')
-
-if proseq_mode is False:   # regular motif mode
-    labels = [0] * N + [1] * N
-    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})        
-else:    # instead generate proseq-like read counts
-    for i in range(2*N):
+        # generate proseq-like read counts
         rdcounts[i] = np.array(rng.poisson(proseq_mean[i]),dtype=np.int8)
+
     df = pd.DataFrame({'readCounts': rdcounts, 'seq': seqs})
     
+else:   # regular motif mode
+
+    # implant motif instances only in the second half
+    for i in range(N, 2*N):    
+        for m in mnorm:
+            # pick a location at random from the middle third of the sequence
+            p = r.randint(math.ceil(seqlen/3), math.floor(2*seqlen/3))        
+            s = seqs[i][:p-1] + samp_motif(m) + seqs[i][p+m.shape[1]-1:]
+            seqs[i] = s
+
+    # set 0/1 labels        
+    labels = [0] * N + [1] * N
+    df = pd.DataFrame({'hasMotif': labels, 'seq': seqs})        
+
+print(f'Saving dataframe to {outroot}.csv.')
 df.to_csv(outroot + ".csv", index=False)
-
-
